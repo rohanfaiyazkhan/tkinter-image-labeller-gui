@@ -2,7 +2,6 @@ from tkinter import *
 from tkinter import messagebox
 from PIL import Image, ImageTk
 import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
 import cv2
 from utils import verify_image, load_images_recursively, resize_with_padding
@@ -34,10 +33,10 @@ def get_first_element_that_was_not_set(labels, marked_for_deletion, marked_for_m
     return -1
 
 class Window(Frame):
-    left_value: StringVar = None
-    right_value: StringVar = None
-    left_menu = None
-    right_menu = None
+    left_value: int = None
+    right_value: int = None
+    left_button = None
+    right_button = None
 
     # tuples with [label_of_first, label_of_second]
     # label can be -1 = unlabeled, 0 = before, 1 = after
@@ -88,6 +87,8 @@ class Window(Frame):
         np.save(labels_file, self.labels)
         np.save(marked_for_deletion_file, self.marked_for_deletion)
         np.save(marked_for_manual_file, self.marked_for_manual)
+
+        print("Successfully saved")
         
 
     def load_image(self, index):
@@ -114,6 +115,8 @@ class Window(Frame):
             error.grid_forget()
             error.grid(row=1, column=0, columnspan=4)
 
+            self.mark_for_deletion_handler()
+
     def next_handler(self):
         self.index += 1
 
@@ -128,58 +131,72 @@ class Window(Frame):
         self.load_buttons()
         self.load_label_pickers()
 
-    def left_label_change_handler(self, *args):
+    def set_label(self, left_or_right, value):
         index_of_image = self.index
 
-        if self.left_value != None:
-            new_label = self.left_value.get()
+        if left_or_right == "left":
+            self.labels[index_of_image, 0] = value
+        elif left_or_right == "right":
+            self.labels[index_of_image, 1] = value
 
-            if new_label:
-                new_label_numeric = options2values[new_label]
-                self.labels[index_of_image, 0] = new_label_numeric
 
-                if new_label_numeric >= 0:
-                    self.right_value.set(values2options[0] if new_label_numeric == 1 else values2options[1])
+    def left_label_change_handler(self, *args):
+        index_of_image = self.index
+        current_labels = self.labels[index_of_image]
+
+        if current_labels[0] == 1:
+            self.labels[index_of_image, 0] = 0
+            self.labels[index_of_image, 1] = 1
+        else:
+            self.labels[index_of_image, 0] = 1
+            self.labels[index_of_image, 1] = 0
+
+        self.load_label_pickers()
 
     def right_label_change_handler(self, *args):
         index_of_image = self.index
+        current_labels = self.labels[index_of_image]
 
-        if self.right_value != None:
-            new_label = self.right_value.get()
+        if current_labels[1] == 1:
+            self.labels[index_of_image, 0] = 1
+            self.labels[index_of_image, 1] = 0
+        else:
+            self.labels[index_of_image, 0] = 0
+            self.labels[index_of_image, 1] = 1
 
-            if new_label:
-                new_label_numeric = options2values[new_label]
-                self.labels[index_of_image, 1] = new_label_numeric
-
-                if new_label_numeric >= 0:
-                    self.left_value.set(values2options[0] if new_label_numeric == 1 else values2options[1])
+        self.load_label_pickers()
 
     def load_label_pickers(self):
         current_index = self.index
         labels = self.labels[current_index]
 
-        if self.left_value == None:
-            self.left_value = StringVar(self)
-        if self.right_value == None:
-            self.right_value = StringVar(self)
+        if labels[0] == -1 and labels[1] == -1:
+            left_value = 0       
+            right_value = 1
+            self.set_label("left", left_value)
+            self.set_label("right", right_value)
+        else:
+            left_value = labels[0]        
+            right_value = labels[1]
 
-        self.left_value.trace("w", self.left_label_change_handler)
-        self.right_value.trace("w", self.right_label_change_handler)
+        if self.left_button == None:
+            self.left_button = Button(self, command=self.left_label_change_handler, text=values2options[left_value])
 
-        self.left_value.set(values2options[labels[0]])        
-        self.right_value.set(values2options[labels[1]])
-
-        if self.left_menu == None:
-            self.left_menu = OptionMenu(self, self.left_value, *options)
+        if self.right_button == None:
+            self.right_button = Button(self, command=self.right_label_change_handler, text=values2options[right_value])
         
-        self.left_menu.grid_forget()
-        self.left_menu.grid(row=2, column=1, sticky=W)
+        if left_value == 0 and right_value == 1:
+            self.left_button.config(bg="white", fg="black", text=values2options[0])
+            self.right_button.config(bg="#525252", fg="white", text=values2options[1])
+        elif left_value == 1 and right_value == 0:
+            self.left_button.config(bg="#525252", fg="white", text=values2options[1])            
+            self.right_button.config(bg="white", fg="black", text=values2options[0])
 
-        if self.right_menu == None:
-            self.right_menu = OptionMenu(self, self.right_value, *options)
+        self.left_button.grid_forget()
+        self.left_button.grid(row=2, column=1, sticky=W)
         
-        self.right_menu.grid_forget()
-        self.right_menu.grid(row=2, column=3)
+        self.right_button.grid_forget()
+        self.right_button.grid(row=2, column=2)
 
     def mark_for_deletion_handler(self):
         current_index = self.index
@@ -240,7 +257,7 @@ class Window(Frame):
         self.prev_btn.grid(row=2, column=0,  sticky=E)
 
         self.next_btn.grid_forget()
-        self.next_btn.grid(row=2, column=2)
+        self.next_btn.grid(row=2, column=3)
 
         self.mark_for_deletion_button.grid_forget()
         self.mark_for_deletion_button.grid(row=3, column=0)
